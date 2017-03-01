@@ -28,13 +28,25 @@ void OS_Init(void){
   DisableInterrupts();
   BSP_Clock_InitFastest();// set processor clock to fastest speed
   // initialize any global variables as needed
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
 }
 
 void SetInitialStack(int i){
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
+  tcbs[i].sp = &Stacks[i][STACKSIZE-16]; // thread stack pointer
+  Stacks[i][STACKSIZE-1] = 0x01000000;   // thumb bit
+  Stacks[i][STACKSIZE-3] = 0x14141414;   // R14
+  Stacks[i][STACKSIZE-4] = 0x12121212;   // R12
+  Stacks[i][STACKSIZE-5] = 0x03030303;   // R3
+  Stacks[i][STACKSIZE-6] = 0x02020202;   // R2
+  Stacks[i][STACKSIZE-7] = 0x01010101;   // R1
+  Stacks[i][STACKSIZE-8] = 0x00000000;   // R0
+  Stacks[i][STACKSIZE-9] = 0x11111111;   // R11
+  Stacks[i][STACKSIZE-10] = 0x10101010;  // R10
+  Stacks[i][STACKSIZE-11] = 0x09090909;  // R9
+  Stacks[i][STACKSIZE-12] = 0x08080808;  // R8
+  Stacks[i][STACKSIZE-13] = 0x07070707;  // R7
+  Stacks[i][STACKSIZE-14] = 0x06060606;  // R6
+  Stacks[i][STACKSIZE-15] = 0x05050505;  // R5
+  Stacks[i][STACKSIZE-16] = 0x04040404;  // R4
 }
 
 //******** OS_AddThreads ***************
@@ -49,8 +61,18 @@ int OS_AddThreads(void(*thread0)(void),
 // initialize TCB circular list
 // initialize RunPt
 // initialize four stacks, including initial PC
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
+	int32_t status;
+	status = StartCritical();
+  tcbs[0].next = &tcbs[1]; // 0 points to 1
+  tcbs[1].next = &tcbs[2]; // 1 points to 2
+  tcbs[2].next = &tcbs[3]; // 2 points to 3
+  tcbs[3].next = &tcbs[0]; // 3 points to 0
+  SetInitialStack(0); Stacks[0][STACKSIZE-2] = (int32_t)(thread0); // PC
+  SetInitialStack(1); Stacks[1][STACKSIZE-2] = (int32_t)(thread1); // PC
+  SetInitialStack(2); Stacks[2][STACKSIZE-2] = (int32_t)(thread2); // PC
+	SetInitialStack(3); Stacks[3][STACKSIZE-2] = (int32_t)(thread3); // PC
+  RunPt = &tcbs[0];       // thread 0 will run first
+  EndCritical(status);
   return 1;               // successful
 }
 
@@ -65,11 +87,24 @@ int OS_AddThreads3(void(*task0)(void),
 // initialize TCB circular list (same as RTOS project)
 // initialize RunPt
 // initialize four stacks, including initial PC
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
+  int32_t status;
+  status = StartCritical();
+  tcbs[0].next = &tcbs[1]; // 0 points to 1
+  tcbs[1].next = &tcbs[2]; // 1 points to 2
+  tcbs[2].next = &tcbs[0]; // 2 points to 0
+  SetInitialStack(0); Stacks[0][STACKSIZE-2] = (int32_t)(task0); // PC
+  SetInitialStack(1); Stacks[1][STACKSIZE-2] = (int32_t)(task1); // PC
+  SetInitialStack(2); Stacks[2][STACKSIZE-2] = (int32_t)(task2); // PC
+  RunPt = &tcbs[0];       // thread 0 will run first
+  EndCritical(status);  
   return 1;               // successful
 }
-                 
+
+void(*periodic_thread1)(void);
+void(*periodic_thread2)(void);
+uint32_t period_thread1;
+uint32_t period_thread2;
+
 //******** OS_AddPeriodicEventThreads ***************
 // Add two background periodic event threads
 // Typically this function receives the highest priority
@@ -82,8 +117,10 @@ int OS_AddThreads3(void(*task0)(void),
 // These threads can call OS_Signal
 int OS_AddPeriodicEventThreads(void(*thread1)(void), uint32_t period1,
   void(*thread2)(void), uint32_t period2){
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
+  periodic_thread1 = thread1;
+  periodic_thread2 = thread2;
+	period_thread1 = period1;
+	period_thread2 = period2;
   return 1;
 }
 
@@ -101,11 +138,25 @@ void OS_Launch(uint32_t theTimeSlice){
   StartOS();                   // start on the first task
 }
 // runs every ms
-void Scheduler(void){ // every time slice
+
+uint32_t TheTime1=0;
+uint32_t TheTime2=0;
+
+void Scheduler(void){
+	// every time slice
   // run any periodic event threads if needed
   // implement round robin scheduler, update RunPt
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
+	TheTime1++;
+	TheTime2++;
+  if(TheTime1 == period_thread1){
+    periodic_thread1(); // every period_thread1 ms
+    TheTime1 = 0;
+  }
+	if (TheTime2 == period_thread2) {
+		periodic_thread2(); // every period_thread2 ms
+		TheTime2 = 0;
+	}
+	RunPt = RunPt->next;    // Round Robin
 }
 
 // ******** OS_InitSemaphore ************
@@ -114,8 +165,7 @@ void Scheduler(void){ // every time slice
 //          initial value of semaphore
 // Outputs: none
 void OS_InitSemaphore(int32_t *semaPt, int32_t value){
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
+	(*semaPt) = value;
 }
 
 // ******** OS_Wait ************
@@ -125,7 +175,16 @@ void OS_InitSemaphore(int32_t *semaPt, int32_t value){
 // Inputs:  pointer to a counting semaphore
 // Outputs: none
 void OS_Wait(int32_t *semaPt){
-
+	// disable interrupts
+	DisableInterrupts();
+	while ((*semaPt) == 0) {
+	// enable interrupts
+		EnableInterrupts();
+		DisableInterrupts();
+	}
+	(*semaPt)--;
+	//enable interrupts
+	EnableInterrupts();
 }
 
 // ******** OS_Signal ************
@@ -135,12 +194,16 @@ void OS_Wait(int32_t *semaPt){
 // Inputs:  pointer to a counting semaphore
 // Outputs: none
 void OS_Signal(int32_t *semaPt){
-//***YOU IMPLEMENT THIS FUNCTION*****
-
+	//disable interrupts
+	DisableInterrupts();
+	(*semaPt)++;
+	// enable interrupts
+	EnableInterrupts();
 }
 
 
-
+int32_t mailboxDataReady;
+uint32_t mailboxData;
 
 // ******** OS_MailBox_Init ************
 // Initialize communication channel
@@ -149,8 +212,8 @@ void OS_Signal(int32_t *semaPt){
 // Outputs: none
 void OS_MailBox_Init(void){
   // include data field and semaphore
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
+	OS_InitSemaphore(&mailboxDataReady, 1); // when you init, set it to 1 to mean mailbox is free to start with
+	mailboxData = 0;
 }
 
 // ******** OS_MailBox_Send ************
@@ -159,9 +222,11 @@ void OS_MailBox_Init(void){
 // Inputs:  data to be sent
 // Outputs: none
 // Errors: data lost if MailBox already has data
-void OS_MailBox_Send(uint32_t data){
-  //***YOU IMPLEMENT THIS FUNCTION*****
-
+void OS_MailBox_Send(uint32_t data){	
+	// if called, immediately overwrite existing data
+	mailboxData = data;
+	// signal there's new data
+	OS_Signal(&mailboxDataReady);
 }
 
 // ******** OS_MailBox_Recv ************
@@ -172,8 +237,14 @@ void OS_MailBox_Send(uint32_t data){
 // Inputs:  none
 // Outputs: data retreived
 // Errors:  none
-uint32_t OS_MailBox_Recv(void){ uint32_t data;
-  //***YOU IMPLEMENT THIS FUNCTION*****
+uint32_t OS_MailBox_Recv(void){
+	uint32_t data;
+	// wait for data to appear
+	OS_Wait(&mailboxDataReady);
+	// get the data
+	data = mailboxData;
+	// no need to signal anything to the mailbox filling function
+	//OS_Signal(&mailboxDataReady);
   return data;
 }
 

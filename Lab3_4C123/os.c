@@ -41,10 +41,23 @@ void OS_Init(void){
 }
 
 void SetInitialStack(int i){
-
-  // **Same as Lab 2****
+  tcbs[i].sp = &Stacks[i][STACKSIZE-16]; // thread stack pointer
+  Stacks[i][STACKSIZE-1] = 0x01000000;   // thumb bit
+  Stacks[i][STACKSIZE-3] = 0x14141414;   // R14
+  Stacks[i][STACKSIZE-4] = 0x12121212;   // R12
+  Stacks[i][STACKSIZE-5] = 0x03030303;   // R3
+  Stacks[i][STACKSIZE-6] = 0x02020202;   // R2
+  Stacks[i][STACKSIZE-7] = 0x01010101;   // R1
+  Stacks[i][STACKSIZE-8] = 0x00000000;   // R0
+  Stacks[i][STACKSIZE-9] = 0x11111111;   // R11
+  Stacks[i][STACKSIZE-10] = 0x10101010;  // R10
+  Stacks[i][STACKSIZE-11] = 0x09090909;  // R9
+  Stacks[i][STACKSIZE-12] = 0x08080808;  // R8
+  Stacks[i][STACKSIZE-13] = 0x07070707;  // R7
+  Stacks[i][STACKSIZE-14] = 0x06060606;  // R6
+  Stacks[i][STACKSIZE-15] = 0x05050505;  // R5
+  Stacks[i][STACKSIZE-16] = 0x04040404;  // R4
 }
-
 //******** OS_AddThreads ***************
 // Add six main threads to the scheduler
 // Inputs: function pointers to six void/void main threads
@@ -123,23 +136,33 @@ void OS_Sleep(uint32_t sleepTime){
 // suspend, stops running
 }
 
+
 // ******** OS_InitSemaphore ************
 // Initialize counting semaphore
 // Inputs:  pointer to a semaphore
 //          initial value of semaphore
 // Outputs: none
 void OS_InitSemaphore(int32_t *semaPt, int32_t value){
-//***IMPLEMENT THIS***
+	(*semaPt) = value;
 }
 
 // ******** OS_Wait ************
-// Decrement semaphore and block if less than zero
+// Decrement semaphore
 // Lab2 spinlock (does not suspend while spinning)
 // Lab3 block if less than zero
 // Inputs:  pointer to a counting semaphore
 // Outputs: none
 void OS_Wait(int32_t *semaPt){
-//***IMPLEMENT THIS***
+	// disable interrupts
+	DisableInterrupts();
+	while ((*semaPt) == 0) {
+	// enable interrupts
+		EnableInterrupts();
+		DisableInterrupts();
+	}
+	(*semaPt)--;
+	//enable interrupts
+	EnableInterrupts();
 }
 
 // ******** OS_Signal ************
@@ -149,7 +172,11 @@ void OS_Wait(int32_t *semaPt){
 // Inputs:  pointer to a counting semaphore
 // Outputs: none
 void OS_Signal(int32_t *semaPt){
-//***IMPLEMENT THIS***
+	//disable interrupts
+	DisableInterrupts();
+	(*semaPt)++;
+	// enable interrupts
+	EnableInterrupts();
 }
 
 #define FSIZE 10    // can be any size
